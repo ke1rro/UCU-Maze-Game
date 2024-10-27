@@ -4,8 +4,8 @@ import curses
 import sys
 
 
-width = 39
-height = 23
+width = 19
+height = 15
 
 
 maze = dict()
