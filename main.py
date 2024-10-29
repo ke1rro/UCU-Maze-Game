@@ -2,6 +2,7 @@
 import random
 import curses
 import time
+import signal
 from curses import wrapper
 from curses.textpad import Textbox, rectangle
 
@@ -26,7 +27,7 @@ LOSE = """
         ▐▌   ▐▌ ▐▌▐▌   ▐▌
         ▐▌   ▐▌ ▐▌ ▝▀▚▖▐▛▀▀▘
         ▐▙▄▄▖▝▚▄▞▘▗▄▄▞▘▐▙▄▄▖
-PRESS 'R' to RESTART or 'Q' to QUIT
+PRESS 'R' to RESTART or hit 'Q' TWICE to QUIT
 """
 AUTHOR_INFO = """
 game made by: Nikita Lenyk
@@ -53,6 +54,15 @@ To CHANGE the shooting direction use
 TO WIN decrypt ALL '?' into people
 and find the exit from maze
 """
+WIDTH = 19
+HEIGTH = 15
+
+
+def ignore_ctrl_c():
+    """
+    Ignoring CTRL+C, to avoid errors in game runtime
+    """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 def init_game_menu(stdscr) -> bool | str:
@@ -60,8 +70,8 @@ def init_game_menu(stdscr) -> bool | str:
     The starting menu of the game
 
     Returns:
-        bool | str: False if user quites the game and
-        username if user accepts
+        bool | str: False if user quits the game, and
+        username if the user accepts
     """
     screen_lines, _ = stdscr.getmaxyx()
     curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
@@ -77,15 +87,15 @@ def init_game_menu(stdscr) -> bool | str:
         start_author_line = screen_lines - len(author_lines) - 1
 
         for i, line in enumerate(author_lines):
-            stdscr.addstr(start_author_line + i,
-                          0, line, white_and_red | curses.A_BOLD)
+            stdscr.addstr(start_author_line + i, 0,
+                          line, white_and_red | curses.A_BOLD)
 
         stdscr.refresh()
 
-        user_key = stdscr.getch()
-        if user_key == curses.KEY_ENTER or user_key == ord('\n'):
-            text_box_y = GREATING.count('\n') + 1
+        user_key = stdscr.getkey()
 
+        if user_key == '\n':
+            text_box_y = GREATING.count('\n') + 1
             stdscr.addstr(
                 text_box_y, 0, "Enter your name: (hit ENTER to send)"
                 )
@@ -101,9 +111,10 @@ def init_game_menu(stdscr) -> bool | str:
             stdscr.clear()
             stdscr.refresh()
 
-            return user_name
-        elif user_key == ord('q'):
+        elif user_key.lower() == 'q':
             return False
+
+    return user_name
 
 
 def encrypt_the_terminal(stdscr):
@@ -135,21 +146,26 @@ def user_interaction(stdscr):
     curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
     curses.init_pair(4, curses.COLOR_GREEN, curses.COLOR_BLACK)
     curses.init_pair(5, curses.COLOR_BLUE, curses.COLOR_BLACK)
+
     red = curses.color_pair(3)
     green = curses.color_pair(4)
     blue = curses.color_pair(5)
+
     if user_name := init_game_menu(stdscr):
         stdscr.clear()
         stdscr.addstr(
             f"Hello {user_name}!\n{STORY}",
             curses.A_BOLD)
+
         stdscr.addstr(f'{GAME_GUIDE}', green)
         stdscr.addstr("Press 'ENTER' to continue", curses.A_BOLD | blue)
         stdscr.refresh()
+
         text_box_y = STORY.count('\n')
+
         while True:
-            user_key = stdscr.getch()
-            if user_key == curses.KEY_ENTER or user_key == ord('\n'):
+            user_key = stdscr.getkey().lower()
+            if user_key == '\n':
                 for i in range(5, 0, -1):
                     stdscr.addstr(text_box_y + 1, 0, f'The wizard \
 even encrypted this message it \
@@ -167,27 +183,20 @@ will be destroyed in: {i}', red | curses.A_BOLD)
     return True
 
 
-width = 19
-height = 15
-
-maze = [[1 for _ in range(height)] for _ in range(width)]
-enemies = []
-
-bullets = random.randint(6, 12)
-
-
-def carve_maze(x, y):
-    """Recursive function to carve out paths in the maze."""
+def carve_maze(x, y, maze):
+    """
+    Recursive function to carve out paths in the maze
+    """
     directions = [0, 1, 2, 3]
     random.shuffle(directions)
 
-    for dir in directions:
+    for direction in directions:
         dx, dy = 0, 0
-        if dir == 0:
+        if direction == 0:
             dx = 1
-        elif dir == 1:
+        elif direction == 1:
             dy = 1
-        elif dir == 2:
+        elif direction == 2:
             dx = -1
         else:
             dy = -1
@@ -197,28 +206,39 @@ def carve_maze(x, y):
         x2 = x1 + dx
         y2 = y1 + dy
 
-        if 0 < x2 < width and 0 < y2 < height:
+        if 0 < x2 < WIDTH and 0 < y2 < HEIGTH:
             if maze[x1][y1] == 1 and maze[x2][y2] == 1:
                 maze[x1][y1] = 0
                 maze[x2][y2] = 0
-                carve_maze(x2, y2)
+                carve_maze(x2, y2, maze)
 
 
 def generate_maze():
-    """Generate the maze starting from a given cell."""
+    """
+    Generate the maze starting from a given cell
+    """
     random.seed()
+    # maze[1][1] = 0
+    # carve_maze(1, 1)
+    # maze[1][0] = 0
+    # maze[WIDTH - 2][HEIGTH - 1] = 0
+    maze = [[1 for _ in range(HEIGTH)] for _ in range(WIDTH)]
     maze[1][1] = 0
-    carve_maze(1, 1)
+    carve_maze(1, 1, maze)
     maze[1][0] = 0
-    maze[width - 2][height - 1] = 0
+    maze[WIDTH - 2][HEIGTH - 1] = 0
+    return maze
 
 
-def display_maze(stdscr):
-    """Display the generated maze on the screen."""
+def display_maze(stdscr, maze: list[list[int]],
+                 enemies:  list[tuple[int]]):
+    """
+    Display the generated maze on the screen
+    """
     stdscr.clear()
     stdscr.move(0, 0)
-    for y in range(height):
-        for x in range(width):
+    for y in range(HEIGTH):
+        for x in range(WIDTH):
             if maze[x][y] == 0:
                 stdscr.addstr("  ", curses.color_pair(1))
             else:
@@ -238,20 +258,26 @@ def display_user(stdscr, y, x):
     stdscr.refresh()
 
 
-def place_enemies(num_enemies: int):
+def place_enemies(maze: list[list[int]],
+                  num_enemies: int) -> list[tuple[int]]:
     """Randomly place enemies in the maze."""
+    enemies = []
     while len(enemies) < num_enemies:
-        x = random.randint(1, width - 2)
-        y = random.randint(1, height - 2)
+        x = random.randint(1, WIDTH - 2)
+        y = random.randint(1, HEIGTH - 2)
         if maze[x][y] == 0 and (x, y) not in enemies:
             enemies.append((x, y))
+    return enemies
 
 
 def display_game_info(stdscr, bullets: int,
                       enemies_count: int, direction: str):
-    stdscr.addstr(height + 1, 0,
+    """
+    Displaying game interface
+    """
+    stdscr.addstr(HEIGTH + 1, 0,
                   f'Bullets left: {bullets}', curses.A_BOLD)
-    stdscr.addstr(height + 2, 0,
+    stdscr.addstr(HEIGTH + 2, 0,
                   f'Enemies left: {enemies_count}', curses.A_BOLD)
 
     arrow = ' '
@@ -264,37 +290,45 @@ def display_game_info(stdscr, bullets: int,
     elif direction == 'right':
         arrow = '→'
 
-    stdscr.addstr(height + 3, 0, f'Direction: {arrow}', curses.color_pair(2))
+    stdscr.addstr(HEIGTH + 3, 0, f'Direction: {arrow}', curses.color_pair(2))
 
 
 def show_lose_message(stdscr):
+    """
+    Prints 'YOU LOSE' on screen
+    """
     stdscr.clear()
     stdscr.addstr(LOSE)
     stdscr.refresh()
     while True:
         key = stdscr.getkey().lower()
         if key == 'r':
-            start_game(stdscr)
-        if key == 'q':
-            break
+            return 'restart'
+        elif key == 'q':
+            return 'quit'
 
 
-def mainloop(stdscr):
+def mainloop(stdscr, maze: list[list[int]],
+             bullets: int, enemies: list[tuple[int]]):
+    """
+    Mainloop for user's interaction with game
+    """
     y = 1
     m = 2
     x = 1
     last_direction = ''
     bullets_remaining = bullets
-
+    bullets_list = []
     stdscr.nodelay(True)
     stdscr.clear()
-    display_maze(stdscr)
+    display_maze(stdscr, maze, enemies)
     display_user(stdscr, y, m)
 
     bullets_list = []
     touched_enemy = False
+    no_bullets = False
 
-    while not touched_enemy:
+    while not touched_enemy and not no_bullets:
         try:
             key = stdscr.getkey().lower()
         except Exception:
@@ -331,29 +365,34 @@ def mainloop(stdscr):
 
         if key == ' ' and bullets_remaining > 0:
             bullets_remaining -= 1
-            bullets_list.append({
-                "x": x, "y": y,
-                "direction": last_direction,
-                "prev_x": x, "prev_y": y
-            })
 
+            # One list represent single bullet where,
+            # first x, y the currrent coordinates of bullet,
+            # the last x, y represnt the previous coordinates of bullet
+            bullets_list.append([
+                x, y,
+                last_direction,
+                x, y
+            ])
+
+        # Iterates through list of tuples to get bullet info
         for bullet in bullets_list[:]:
-            stdscr.addstr(bullet["prev_y"], bullet["prev_x"] * 2, "  ")
+            stdscr.addstr(bullet[4], bullet[3] * 2, "  ")
 
-            if bullet["direction"] == 'left':
-                bullet["x"] -= 1
-            elif bullet["direction"] == 'right':
-                bullet["x"] += 1
-            elif bullet["direction"] == 'up':
-                bullet["y"] -= 1
-            elif bullet["direction"] == 'down':
-                bullet["y"] += 1
+            if bullet[2] == 'left':
+                bullet[0] -= 1
+            elif bullet[2] == 'right':
+                bullet[0] += 1
+            elif bullet[2] == 'up':
+                bullet[1] -= 1
+            elif bullet[2] == 'down':
+                bullet[1] += 1
 
-            bullet["prev_x"], bullet["prev_y"] = bullet["x"], bullet["y"]
+            bullet[3], bullet[4] = bullet[0], bullet[1]
 
-            bx, by = bullet["x"], bullet["y"]
+            bx, by = bullet[0], bullet[1]
 
-            if 0 <= bx < width and 0 <= by < height:
+            if 0 <= bx < WIDTH and 0 <= by < HEIGTH:
                 if maze[bx][by] == 1:
                     bullets_list.remove(bullet)
                 elif (bx, by) in enemies:
@@ -369,47 +408,62 @@ def mainloop(stdscr):
                           len(enemies), last_direction)
 
         for bullet in bullets_list:
-            stdscr.addstr(bullet["y"], bullet["x"] * 2,
+            stdscr.addstr(bullet[1], bullet[0] * 2,
                           "*", curses.color_pair(2))
 
         if (x, y) in enemies:
             touched_enemy = True
             stdscr.nodelay(False)
 
+        if bullets_remaining == 0 and len(enemies) > 1:
+            no_bullets = True
+            stdscr.nodelay(False)
+
         stdscr.refresh()
         time.sleep(0.1)
 
-    if touched_enemy or bullets_remaining == 0:
-        show_lose_message(stdscr)
+    if touched_enemy:
+        action = show_lose_message(stdscr)
+        if action == 'restart':
+            start_game(stdscr)
+        else:
+            return
+
+    if no_bullets:
+        action = show_lose_message(stdscr)
+        if action == 'restart':
+            start_game(stdscr)
+        else:
+            return
 
 
 def start_game(stdscr):
-    """Start the game if user lost and pressed 'R'"""
-    global bullets, maze
-    maze = [[1 for _ in range(height)] for _ in range(width)]
-    bullets = random.randint(6, 12)
+    """
+    Starts the game if user lost and pressed 'R'
+    """
+    bullets = random.randint(6, 10)
+    maze = generate_maze()
+    enemies = place_enemies(maze, random.randint(6, bullets))
     stdscr.clear()
-    generate_maze()
-    place_enemies(6)
-    mainloop(stdscr)
+    mainloop(stdscr, maze, bullets, enemies)
 
 
 def main(stdscr):
-    """Main function"""
+    """
+    Entry point
+    """
     while True:
-        try:
+        stdscr.clear()
+        stdscr.refresh()
+        if user_interaction(stdscr):
             stdscr.clear()
+            start_game(stdscr)
             stdscr.refresh()
-
-            if user_interaction(stdscr):
-                stdscr.clear()
-                start_game(stdscr)
-                stdscr.refresh()
-                stdscr.getch()
-            else:
-                break
-        except KeyboardInterrupt:
-            continue
+            stdscr.getch()
+        else:
+            break
 
 
-wrapper(main)
+if __name__ == '__main__':
+    ignore_ctrl_c()
+    wrapper(main)
