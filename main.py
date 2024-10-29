@@ -433,7 +433,6 @@ def mainloop(stdscr, maze: list[list[int]],
             touched_enemy = True
             stdscr.nodelay(False)
 
-        # if bullets_remaining + 1 < len(enemies) - 1:
         # Only check if no bullets are currently fired
         if len(bullets_list) == 0:
             if bullets_remaining < len(enemies):
